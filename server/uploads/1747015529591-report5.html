@@ -1,0 +1,37 @@
+<!-- report_prediction.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>预测模块测试报告</title>
+  <style>/* 样式保持一致，略 */</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>预测模块测试报告</h1>
+      <p class="timestamp">生成时间：2025-04-24 17:00</p>
+    </div>
+    <div class="summary">
+      <div class="stat-card"><div class="stat-value">5</div><div class="stat-label">测试用例总数</div></div>
+      <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">通过数量</div></div>
+      <div class="stat-card"><div class="stat-value">1</div><div class="stat-label">失败数量</div></div>
+      <div class="stat-card"><div class="stat-value">80%</div><div class="stat-label">通过率</div></div>
+    </div>
+    <h2>测试用例详情</h2>
+    <div class="test-cases">
+      <div class="test-case">
+        <h3>静态障碍预测 <span class="success">✓ 通过</span></h3>
+        <p>目标：静止障碍物轨迹预测</p>
+        <p>耗时：120ms</p>
+        <p>准确率：96.7%</p>
+      </div>
+      <div class="test-case">
+        <h3>动态人车预测 <span class="failed">✗ 失败</span></h3>
+        <p>目标：预测人车混行区域轨迹</p>
+        <p>失败原因：预测漂移大于 1.5m</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
