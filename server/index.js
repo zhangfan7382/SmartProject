@@ -8,7 +8,15 @@ const bcrypt = require('bcrypt');
 const bodyParser = require('body-parser');
 
 // MongoDB连接配置
-mongoose.connect('mongodb://127.0.0.1:27017/sadp_test', {
+// mongoose.connect('mongodb://127.0.0.1:27017/sadp_test', {
+//   useNewUrlParser: true,
+//   useUnifiedTopology: true,
+//   serverSelectionTimeoutMS: 5000 // 5秒超时
+// })
+
+const mongoURI = process.env.MONGO_URL;
+
+mongoose.connect(mongoURI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
   serverSelectionTimeoutMS: 5000 // 5秒超时
