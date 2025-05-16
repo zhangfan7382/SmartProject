@@ -3,10 +3,10 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const bodyParser = require('body-parser');
-
+require("dotenv").config(); // 加载.env
+const mongoose = require('mongoose');
 // MongoDB连接配置
 // mongoose.connect('mongodb://127.0.0.1:27017/sadp_test', {
 //   useNewUrlParser: true,
@@ -17,8 +17,8 @@ const bodyParser = require('body-parser');
 const mongoURI = process.env.MONGO_URL;
 
 mongoose.connect(mongoURI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
+  // useNewUrlParser: true,
+  // useUnifiedTopology: true,
   serverSelectionTimeoutMS: 5000 // 5秒超时
 })
 .then(() => {
