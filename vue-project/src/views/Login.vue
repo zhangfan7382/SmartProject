@@ -41,10 +41,8 @@ const password = ref('')
 
 const handleLogin = async () => {
   try {
-    // 获取当前主机地址
-    const host = window.location.hostname;
-    const port = '3000';
-    const apiUrl = `http://${host}:${port}/api/login`;
+    // 使用新的服务器地址
+    const apiUrl = 'https://smartproject.onrender.com/api/login';
 
     const response = await axios.post(apiUrl, {
       username: username.value,
