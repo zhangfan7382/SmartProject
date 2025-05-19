@@ -5,9 +5,12 @@ import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
-// https://vitejs.dev/config/
+
+// 判断是否 GitHub Pages 环境（传入环境变量）
+const isGitHubPages = process.env.DEPLOY_TARGET === 'GH_PAGES'
+
 export default defineConfig({
-  // base:'/SmartProject/',
+  base: isGitHubPages ? '/SmartProject/' : '/', // 根据部署目标切换 base
   plugins: [
     vue(),
     vueJsx(),
