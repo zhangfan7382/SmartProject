@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "deploy": "gh-pages -d vue-project/dist",
+    "deploy": "gh-pages -d dist",
     "preview": "vite preview",
     "test:unit": "vitest",
     "test:e2e": "playwright test",
