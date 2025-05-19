@@ -11,6 +11,7 @@ const isGitHubPages = process.env.DEPLOY_TARGET === 'GH_PAGES'
 
 export default defineConfig({
   base: isGitHubPages ? '/SmartProject/' : '/', // 根据部署目标切换 base
+  // base: '/SmartProject/', // 根据部署目标切换 base
   plugins: [
     vue(),
     vueJsx(),
