@@ -5,8 +5,6 @@ const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcrypt');
 const bodyParser = require('body-parser');
-const compression = require('compression');
-const helmet = require('helmet');
 require("dotenv").config(); // 加载.env
 const mongoose = require('mongoose');
 // MongoDB连接配置
@@ -19,8 +17,9 @@ const mongoose = require('mongoose');
 const mongoURI = process.env.MONGO_URL;
 
 mongoose.connect(mongoURI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
+  // useNewUrlParser: true,
+  // useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 5000 // 5秒超时
 })
 .then(() => {
   console.log('MongoDB连接成功');
@@ -35,17 +34,14 @@ mongoose.connection.on('error', (err) => {
 });
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = 3000;
 
-// 中间件配置
-app.use(cors({
-  origin: ['https://smartproject.onrender.com', 'http://localhost:5173'],
-  credentials: true
-}));
-app.use(compression());
-app.use(helmet());
+// 添加 body-parser 中间件
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// 启用 CORS
+app.use(cors());
 
 // 配置文件存储
 const storage = multer.diskStorage({
@@ -75,27 +71,6 @@ const upload = multer({
     });
     cb(null, true);
   }
-});
-
-// 静态文件服务
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// 处理 SPA 路由
-app.get('*', (req, res, next) => {
-  // 如果是 API 请求，继续处理
-  if (req.path.startsWith('/api/')) {
-    return next();
-  }
-  // 如果是静态资源请求，继续处理
-  if (req.path.startsWith('/uploads/')) {
-    return next();
-  }
-  // 如果是 hash 路由，返回 index.html
-  if (req.path.includes('#')) {
-    return res.sendFile(path.join(__dirname, '../vue-project/dist/index.html'));
-  }
-  // 其他所有请求都返回 index.html
-  res.sendFile(path.join(__dirname, '../vue-project/dist/index.html'));
 });
 
 // 静态文件服务中间件
