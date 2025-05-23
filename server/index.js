@@ -7,6 +7,7 @@ const bcrypt = require('bcrypt');
 const bodyParser = require('body-parser');
 require("dotenv").config(); // 加载.env
 const mongoose = require('mongoose');
+const { GridFSBucket } = require('mongodb');
 // MongoDB连接配置
 // mongoose.connect('mongodb://127.0.0.1:27017/sadp_test', {
 //   useNewUrlParser: true,
@@ -23,6 +24,9 @@ mongoose.connect(mongoURI, {
 })
 .then(() => {
   console.log('MongoDB连接成功');
+  // 初始化 GridFS bucket
+  const bucket = new GridFSBucket(mongoose.connection.db);
+  console.log('GridFS bucket 初始化成功');
 })
 .catch(err => {
   console.error('MongoDB连接失败:', err);
@@ -43,75 +47,11 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // 启用 CORS
 app.use(cors());
 
-// 配置文件存储
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = 'uploads';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir);
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    // 解码文件名
-    const decodedName = Buffer.from(file.originalname, 'binary').toString('utf8');
-    // 生成唯一文件名
-    const uniqueName = `${Date.now()}-${decodedName}`;
-    console.log('生成的文件名:', uniqueName);
-    cb(null, uniqueName);
-  }
-});
-
+// 配置 multer 内存存储
 const upload = multer({ 
-  storage: storage,
-  fileFilter: function (req, file, cb) {
-    console.log('接收到的文件信息:', {
-      originalname: file.originalname,
-      mimetype: file.mimetype
-    });
-    cb(null, true);
-  }
-});
-
-// 静态文件服务中间件
-app.use('/uploads', (req, res, next) => {
-  // 解码URL并获取文件名
-  const filename = decodeURIComponent(path.basename(req.url));
-  const filePath = path.join(__dirname, 'uploads', filename);
-  
-  console.log('请求下载文件:', {
-    requestUrl: req.url,
-    decodedFilename: filename,
-    fullPath: filePath
-  });
-  
-  // 检查文件是否存在
-  if (fs.existsSync(filePath)) {
-    console.log('文件存在，准备发送');
-    // 判断文件类型
-    if (filename.toLowerCase().endsWith('.html')) {
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(filename)}`);
-    } else {
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
-    }
-    // 允许跨域
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    // 发送文件
-    res.sendFile(filePath, (err) => {
-      if (err) {
-        console.error('发送文件失败:', err);
-        next(err);
-      } else {
-        console.log('文件发送成功');
-      }
-    });
-  } else {
-    console.log('文件不存在:', filePath);
-    res.status(404).json({ error: '文件不存在' });
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 限制文件大小为 10MB
   }
 });
 
@@ -123,37 +63,35 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: '没有文件被上传' });
     }
 
-    // 解码文件名
-    const decodedOriginalName = Buffer.from(req.file.originalname, 'binary').toString('utf8');
-    console.log('收到上传文件:', {
-      ...req.file,
-      originalname: decodedOriginalName
+    const bucket = new GridFSBucket(mongoose.connection.db);
+    const filename = `${Date.now()}-${req.file.originalname}`;
+    
+    // 创建上传流
+    const uploadStream = bucket.openUploadStream(filename, {
+      metadata: {
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        uploadTime: new Date()
+      }
     });
 
-    const file = {
-      filename: req.file.filename,
-      originalname: decodedOriginalName,
-      path: req.file.path,
-      size: req.file.size,
-      mimetype: req.file.mimetype,
-      uploadTime: new Date()
-    };
+    // 写入文件数据
+    uploadStream.write(req.file.buffer);
+    uploadStream.end();
 
-    console.log('准备保存到数据库的文件信息:', file);
-
-    // 保存到数据库
-    const db = mongoose.connection;
-    const collection = db.collection('files');
-    const result = await collection.insertOne(file);
-    console.log('数据库保存结果:', result);
+    // 等待上传完成
+    await new Promise((resolve, reject) => {
+      uploadStream.on('finish', resolve);
+      uploadStream.on('error', reject);
+    });
 
     res.json({
       message: '文件上传成功',
       file: {
-        id: file.filename,
-        name: file.originalname,
-        size: file.size,
-        uploadTime: file.uploadTime
+        id: uploadStream.id,
+        name: req.file.originalname,
+        size: req.file.size,
+        uploadTime: new Date()
       }
     });
   } catch (error) {
@@ -165,19 +103,15 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 // 获取文件列表接口
 app.get('/api/files', async (req, res) => {
   try {
-    const db = mongoose.connection;
-    const collection = db.collection('files');
-    const files = await collection.find({}).toArray();
-    
-    // console.log('数据库中的文件列表:', files);
+    const bucket = new GridFSBucket(mongoose.connection.db);
+    const files = await bucket.find({}).toArray();
     
     res.json(files.map(file => ({
-      id: file.filename,
-      name: file.originalname,
-      filename: file.filename,
-      size: file.size,
-      uploadTime: file.uploadTime,
-      url: `http://localhost:${port}/uploads/${file.filename}`
+      id: file._id,
+      name: file.metadata.originalname,
+      size: file.length,
+      uploadTime: file.metadata.uploadTime,
+      url: `http://localhost:${port}/api/files/${file._id}`
     })));
   } catch (error) {
     console.error('获取文件列表失败:', error);
@@ -185,44 +119,52 @@ app.get('/api/files', async (req, res) => {
   }
 });
 
-// 删除文件接口
-app.delete('/api/files/:filename', async (req, res) => {
-  const filename = req.params.filename;
-  const filepath = path.join('uploads', filename);
-
+// 下载文件接口
+app.get('/api/files/:id', async (req, res) => {
   try {
-    console.log('收到删除请求，文件名:', filename);
-    console.log('文件完整路径:', filepath);
-
-    // 从数据库删除
-    const db = mongoose.connection;
-    const collection = db.collection('files');
+    const bucket = new GridFSBucket(mongoose.connection.db);
+    const fileId = new mongoose.Types.ObjectId(req.params.id);
     
-    // 先检查文件是否存在于数据库中
-    const file = await collection.findOne({ filename: filename });
-    console.log('数据库中的文件记录:', file);
-    
-    if (!file) {
-      console.log('数据库中未找到文件记录');
+    // 获取文件信息
+    const files = await bucket.find({ _id: fileId }).toArray();
+    if (files.length === 0) {
       return res.status(404).json({ error: '文件不存在' });
     }
+    
+    const file = files[0];
+    
+    // 设置响应头
+    res.setHeader('Content-Type', file.metadata.mimetype);
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.metadata.originalname)}`);
+    
+    // 创建下载流
+    const downloadStream = bucket.openDownloadStream(fileId);
+    downloadStream.pipe(res);
+    
+    // 处理错误
+    downloadStream.on('error', (error) => {
+      console.error('文件下载失败:', error);
+      res.status(500).json({ error: '文件下载失败' });
+    });
+  } catch (error) {
+    console.error('文件下载失败:', error);
+    res.status(500).json({ error: '文件下载失败' });
+  }
+});
 
-    // 删除数据库记录
-    const deleteResult = await collection.deleteOne({ filename: filename });
-    console.log('数据库删除结果:', deleteResult);
-
-    // 删除物理文件
-    if (fs.existsSync(filepath)) {
-      fs.unlinkSync(filepath);
-      console.log('物理文件删除成功');
-    } else {
-      console.log('物理文件不存在:', filepath);
-    }
-
+// 删除文件接口
+app.delete('/api/files/:id', async (req, res) => {
+  try {
+    const bucket = new GridFSBucket(mongoose.connection.db);
+    const fileId = new mongoose.Types.ObjectId(req.params.id);
+    
+    // 删除文件
+    await bucket.delete(fileId);
+    
     res.json({ message: '文件删除成功' });
   } catch (error) {
-    console.error('删除文件失败:', error);
-    res.status(500).json({ error: '删除文件失败' });
+    console.error('文件删除失败:', error);
+    res.status(500).json({ error: '文件删除失败' });
   }
 });
 
