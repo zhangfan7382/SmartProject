@@ -65,12 +65,13 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 
     const bucket = new GridFSBucket(mongoose.connection.db);
     const filename = `${Date.now()}-${req.file.originalname}`;
+    const isHtml = req.file.originalname.toLowerCase().endsWith('.html');
     
     // 创建上传流
     const uploadStream = bucket.openUploadStream(filename, {
       metadata: {
         originalname: req.file.originalname,
-        mimetype: req.file.mimetype,
+        mimetype: isHtml ? 'text/html' : req.file.mimetype,
         uploadTime: new Date()
       }
     });
@@ -91,7 +92,8 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
         id: uploadStream.id,
         name: req.file.originalname,
         size: req.file.size,
-        uploadTime: new Date()
+        uploadTime: new Date(),
+        isHtml: isHtml
       }
     });
   } catch (error) {
@@ -111,6 +113,8 @@ app.get('/api/files', async (req, res) => {
       name: file.metadata.originalname,
       size: file.length,
       uploadTime: file.metadata.uploadTime,
+      mimetype: file.metadata.mimetype,
+      isHtml: file.metadata.originalname.toLowerCase().endsWith('.html'),
       url: `http://localhost:${port}/api/files/${file._id}`
     })));
   } catch (error) {
@@ -132,14 +136,31 @@ app.get('/api/files/:id', async (req, res) => {
     }
     
     const file = files[0];
+    const isHtml = file.metadata.originalname.toLowerCase().endsWith('.html');
     
     // 设置响应头
-    res.setHeader('Content-Type', file.metadata.mimetype);
-    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.metadata.originalname)}`);
+    if (isHtml) {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.metadata.originalname)}`);
+    } else {
+      res.setHeader('Content-Type', file.metadata.mimetype || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.metadata.originalname)}`);
+    }
     
     // 创建下载流
     const downloadStream = bucket.openDownloadStream(fileId);
-    downloadStream.pipe(res);
+    
+    // 如果是 HTML 文件，先读取内容
+    if (isHtml) {
+      const chunks = [];
+      for await (const chunk of downloadStream) {
+        chunks.push(chunk);
+      }
+      const content = Buffer.concat(chunks).toString('utf-8');
+      res.send(content);
+    } else {
+      downloadStream.pipe(res);
+    }
     
     // 处理错误
     downloadStream.on('error', (error) => {
